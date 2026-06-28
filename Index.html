@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>MotorBeats</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg: #06060c;
+  --surface: #0c0c18;
+  --card: #101020;
+  --card2: #141428;
+  --border: #1e1e36;
+  --border2: #252540;
+  --red: #d42020;
+  --red2: #ff2828;
+  --red-glow: rgba(212,32,32,0.5);
+  --red-dim: rgba(212,32,32,0.15);
+  --amber: #ff9500;
+  --green: #30d158;
+  --blue: #0a84ff;
+  --text: #e8e8f5;
+  --text2: #9090b0;
+  --text3: #505070;
+  --needle: #ff3030;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ── LAYOUT ── */
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── AMBIENT BACKGROUND ── */
+.ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.ambient::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(180,20,20,0.08) 0%, transparent 70%);
+  transition: opacity 1s, transform 1s;
+}
+.ambient.running::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.4);
+  background: radial-gradient(circle, rgba(200,30,30,0.14) 0%, transparent 65%);
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 52px 22px 10px;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-t {
+  width: 22px;
+  height: 22px;
+  fill: var(--red2);
+  filter: drop-shadow(0 0 4px var(--red-glow));
+}
+.logo-text {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff;
+}
+.logo-text span { color: var(--red2); }
+
+.top-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text3);
+}
+.badge-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: background 0.4s, box-shadow 0.4s;
+  flex-shrink: 0;
+}
+.badge-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.badge-dot.seek { background: var(--amber); animation: pulse-dot 0.7s infinite; }
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ── TACHOMETER ── */
+.tacho-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  margin-top: -4px;
+}
+
+.tacho-container {
+  position: relative;
+  width: min(72vw, 290px);
+  height: min(72vw, 290px);
+}
+
+#tachoSvg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Carbon texture ring */
+.tacho-outer-ring {
+  fill: none;
+  stroke: #1a1a2e;
+  stroke-width: 3;
+}
+.tacho-bg-arc {
+  fill: none;
+  stroke: #181830;
+  stroke-width: 18;
+  stroke-linecap: round;
+}
+.tacho-fill-arc {
+  fill: none;
+  stroke-width: 18;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.05s linear, stroke 0.2s;
+}
+.tacho-red-zone {
+  fill: none;
+  stroke: rgba(180,20,20,0.2);
+  stroke-width: 18;
+  stroke-linecap: butt;
+}
+.tacho-glow-arc {
+  fill: none;
+  stroke-width: 28;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity 0.3s, stroke 0.2s;
+  filter: blur(6px);
+}
+.tick-major { stroke: #2a2a50; stroke-width: 2; }
+.tick-minor { stroke: #1e1e3a; stroke-width: 1; }
+.tick-red   { stroke: rgba(180,20,20,0.6); stroke-width: 2; }
+
+/* Center display */
+.tacho-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.rpm-big {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 12vw, 54px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s;
+  text-shadow: 0 0 20px rgba(255,255,255,0.1);
+}
+.rpm-unit {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--text3);
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+.rpm-gear {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--red2);
+  margin-top: 6px;
+  letter-spacing: 0.05em;
+  min-height: 28px;
+}
+
+/* Needle */
+.needle-group { transform-origin: 150px 150px; transition: transform 0.06s linear; }
+.needle-line {
+  stroke: var(--needle);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px var(--needle));
+}
+.needle-pivot {
+  fill: var(--needle);
+  filter: drop-shadow(0 0 6px var(--needle));
+}
+
+/* ── DATA STRIP ── */
+.data-strip {
+  display: flex;
+  gap: 8px;
+  padding: 6px 20px;
+  width: 100%;
+  max-width: 400px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+}
+.data-cell {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.data-cell::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+}
+.dc-val {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.dc-label {
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--text3);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+
+/* G-Force bar */
+.gbar-wrap {
+  width: 100%;
+  max-width: 400px;
+  padding: 0 20px 6px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+}
+.gbar-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.gbar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+  width: 0%;
+  transition: width 0.08s linear;
+  transform-origin: left;
+}
+.gbar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+}
+.gbar-label { font-size: 8px; letter-spacing: 0.1em; color: var(--text3); }
+
+/* ── TURBO BOOST INDICATOR ── */
+.turbo-wrap {
+  width: 100%;
+  max-width: 400px;
+  padding: 0 20px 8px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.turbo-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--text3);
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.turbo-pips {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+.turbo-pip {
+  flex: 1;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.1s, box-shadow 0.1s;
+}
+.turbo-pip.lit-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.turbo-pip.lit-amber { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+.turbo-pip.lit-red   { background: var(--red2);  box-shadow: 0 0 5px var(--red2);  }
+
+/* ── START BUTTON ── */
+.start-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 5;
+  padding: 8px 0 4px;
+}
+
+.start-btn-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Pulse rings when running */
+.pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1.5px solid var(--red2);
+  opacity: 0;
+  pointer-events: none;
+}
+.pulse-ring.r1 { animation: none; }
+.pulse-ring.r2 { animation: none; }
+.running .pulse-ring.r1 { animation: ringPulse 2s ease-out infinite; }
+.running .pulse-ring.r2 { animation: ringPulse 2s ease-out 0.7s infinite; }
+@keyframes ringPulse {
+  0%   { transform: scale(1);    opacity: 0.6; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+.start-btn-outer {
+  width: min(52vw, 200px);
+  height: min(52vw, 200px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #252540, #141428, #0c0c1e);
+  box-shadow:
+    0 0 0 1px var(--border2),
+    0 0 0 3px #0c0c18,
+    0 0 0 4px var(--border),
+    0 8px 40px rgba(0,0,0,0.8),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.3s;
+  position: relative;
+}
+.start-btn-outer:active { transform: scale(0.96); }
+.start-btn-outer.running {
+  box-shadow:
+    0 0 0 1px rgba(180,20,20,0.5),
+    0 0 0 3px #0c0c18,
+    0 0 0 4px rgba(180,20,20,0.2),
+    0 8px 40px rgba(0,0,0,0.8),
+    0 0 50px rgba(200,20,20,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.start-btn-dome {
+  width: 77%;
+  height: 77%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 28%,
+    #ff5252 0%,
+    #e02020 28%,
+    #b81010 55%,
+    #880808 78%,
+    #5c0404 100%);
+  box-shadow:
+    0 3px 16px rgba(0,0,0,0.7),
+    0 0 0 2px rgba(0,0,0,0.5),
+    inset 0 5px 16px rgba(255,150,150,0.22),
+    inset 0 -6px 18px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.12s;
+}
+.start-btn-dome::before {
+  content: '';
+  position: absolute;
+  top: 12%; left: 18%;
+  width: 50%; height: 32%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.32) 0%, transparent 70%);
+  transform: rotate(-22deg);
+}
+.start-btn-dome:active {
+  transform: scale(0.96) translateY(2px);
+  box-shadow:
+    0 1px 6px rgba(0,0,0,0.7),
+    0 0 0 2px rgba(0,0,0,0.5),
+    inset 0 2px 10px rgba(180,80,80,0.18),
+    inset 0 -3px 10px rgba(0,0,0,0.6);
+}
+
+.btn-label-main {
+  font-family: var(--font-display);
+  font-size: clamp(16px, 5.5vw, 22px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  z-index: 1;
+  line-height: 1;
+}
+.btn-label-sub {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.35em;
+  color: rgba(255,255,255,0.5);
+  margin-top: 4px;
+  z-index: 1;
+}
+
+/* ── SOUND PILL ── */
+.sound-pill-wrap {
+  padding: 8px 20px 0;
+  width: 100%;
+  max-width: 400px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+}
+.sound-pill {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.sound-pill:active { background: var(--card2); }
+.sound-pill.glow { border-color: rgba(212,32,32,0.4); }
+.sp-icon { font-size: 22px; flex-shrink: 0; }
+.sp-info { flex: 1; min-width: 0; }
+.sp-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-desc {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-arrow {
+  color: var(--text3);
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: transform 0.25s;
+}
+.sp-arrow.open { transform: rotate(180deg); }
+
+/* ── BOTTOM STATUS ── */
+.status-bar {
+  padding: 6px 20px 14px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+  min-height: 28px;
+}
+
+/* ── BOTTOM SHEET ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.overlay.show { opacity: 1; pointer-events: all; }
+
+.sheet {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #0f0f1e;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 22px 22px 0 0;
+  z-index: 101;
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.32,0,0.67,0);
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sheet.show {
+  transform: translateY(0);
+  transition: transform 0.38s cubic-bezier(0.33,1,0.68,1);
+}
+.sheet-drag {
+  width: 38px; height: 4px;
+  background: var(--border2);
+  border-radius: 2px;
+  margin: 12px auto 0;
+  flex-shrink: 0;
+}
+.sheet-title {
+  padding: 14px 22px 12px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-title-label { color: var(--text); }
+.sheet-close {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text2);
+}
+
+.sheet-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 14px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sound-row:active { background: rgba(255,255,255,0.03); }
+.sound-row.active {
+  background: rgba(212,32,32,0.09);
+  border-color: rgba(212,32,32,0.28);
+}
+.sr-icon { font-size: 24px; width: 34px; text-align: center; flex-shrink: 0; }
+.sr-text { flex: 1; min-width: 0; }
+.sr-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.sr-desc { font-size: 10.5px; color: var(--text3); margin-top: 2px; }
+.sr-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sr-preview {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.18s;
+  flex-shrink: 0;
+}
+.sr-preview:active { background: var(--card2); }
+.sr-preview.playing {
+  border-color: var(--red2);
+  color: var(--red2);
+  box-shadow: 0 0 8px var(--red-glow);
+  animation: previewGlow 0.8s ease-in-out infinite alternate;
+}
+@keyframes previewGlow {
+  from { box-shadow: 0 0 4px var(--red-glow); }
+  to   { box-shadow: 0 0 12px var(--red-glow); }
+}
+.sr-check {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: transparent;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.sound-row.active .sr-check {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+/* ── VOLUME SHEET FOOTER ── */
+.sheet-footer {
+  border-top: 1px solid var(--border);
+  padding: 14px 22px 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.vol-icon { font-size: 14px; color: var(--text3); }
+input[type=range] {
+  flex: 1;
+  accent-color: var(--red);
+  cursor: pointer;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border2);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--red2);
+  box-shadow: 0 0 6px var(--red-glow);
+  cursor: pointer;
+}
+
+/* ── SENSOR PERMISSION SCREEN ── */
+.permission-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 30px;
+  text-align: center;
+  gap: 20px;
+}
+.permission-icon { font-size: 56px; }
+.permission-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.permission-text {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 300px;
+}
+.permission-btn {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 16px 40px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 0 20px var(--red-glow);
+}
+.permission-btn:active { transform: scale(0.97); background: var(--red2); }
+.permission-skip {
+  font-size: 12px;
+  color: var(--text3);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: -8px;
+}
+</style>
+</head>
+<body>
+
+<!-- PERMISSION SCREEN -->
+<div class="permission-screen" id="permScreen">
+  <div class="permission-icon">🏎️</div>
+  <div class="permission-title">MotorBeats</div>
+  <div class="permission-text">Für Echtzeit-Reaktion auf Gas geben und Bremsen braucht die App Zugriff auf den Bewegungssensor deines iPhones.</div>
+  <button class="permission-btn" onclick="requestMotionPermission()">Sensor aktivieren</button>
+  <div class="permission-skip" onclick="skipPermission()">Ohne Sensor fortfahren (GPS-Modus)</div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="ambient" id="ambient"></div>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo-wrap">
+      <svg class="logo-t" viewBox="0 0 342 512"><path d="M0 68.5C0 68.5 85 0 171 0s171 68.5 171 68.5c-19 2.5-58.5 12-86 30.5C233.5 57 205 44 171 44s-62.5 13-85 55C58.5 80.5 19 71 0 68.5zM171 512L85.5 136.5C114 117 142.5 108 171 108s57 9 85.5 28.5L171 512z"/></svg>
+      <span class="logo-text">Motor<span>Beats</span></span>
+    </div>
+    <div class="top-badges">
+      <div class="badge"><div class="badge-dot" id="motDot"></div><span id="motLabel">IMU</span></div>
+      <div class="badge"><div class="badge-dot" id="gpsDot"></div><span id="gpsLabel">GPS</span></div>
+    </div>
+  </div>
+
+  <!-- TACHOMETER -->
+  <div class="tacho-section">
+    <div class="tacho-container">
+      <svg id="tachoSvg" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <!-- Outer decorative ring -->
+        <circle cx="150" cy="150" r="145" fill="none" stroke="#141428" stroke-width="2"/>
+        <circle cx="150" cy="150" r="140" fill="none" stroke="#0c0c1e" stroke-width="1"/>
+        <!-- Background arc -->
+        <path id="tachoArcBg" fill="none" stroke="#181830" stroke-width="22" stroke-linecap="round"/>
+        <!-- Red zone highlight -->
+        <path id="tachoArcRed" fill="none" stroke="rgba(160,10,10,0.18)" stroke-width="22" stroke-linecap="butt"/>
+        <!-- Glow arc (behind fill) -->
+        <path id="tachoArcGlow" fill="none" stroke="#cc0000" stroke-width="30" stroke-linecap="round"
+              style="opacity:0;filter:blur(8px);transition:opacity 0.3s,stroke 0.2s"/>
+        <!-- Fill arc -->
+        <path id="tachoArcFill" fill="none" stroke="#00e676" stroke-width="22" stroke-linecap="round"
+              style="transition:stroke-dasharray 0.06s linear,stroke 0.25s"/>
+        <!-- Tick marks -->
+        <g id="tachoTicks"></g>
+        <!-- Tick labels -->
+        <g id="tachoLabels" style="font-family:'Rajdhani',sans-serif;font-size:10px;fill:#303050;text-anchor:middle;dominant-baseline:middle"></g>
+        <!-- Needle -->
+        <g id="needleGroup" style="transform-origin:150px 150px;transform:rotate(-120deg);transition:transform 0.06s linear">
+          <line x1="150" y1="150" x2="150" y2="40"
+                stroke="#ff3030" stroke-width="2.5" stroke-linecap="round"
+                style="filter:drop-shadow(0 0 5px #ff3030)"/>
+          <circle cx="150" cy="150" r="7" fill="#ff3030"
+                  style="filter:drop-shadow(0 0 8px #ff3030)"/>
+          <circle cx="150" cy="150" r="3" fill="#fff" opacity="0.9"/>
+        </g>
+      </svg>
+
+      <div class="tacho-center">
+        <div class="rpm-big" id="rpmBig">0</div>
+        <div class="rpm-unit">RPM</div>
+        <div class="rpm-gear" id="gearDisplay">N</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA STRIP -->
+  <div class="data-strip">
+    <div class="data-cell">
+      <div class="dc-val" id="speedVal">0</div>
+      <div class="dc-label">km/h</div>
+    </div>
+    <div class="data-cell">
+      <div class="dc-val" id="accelVal" style="font-size:18px">0.0</div>
+      <div class="dc-label">G-Kraft</div>
+    </div>
+    <div class="data-cell">
+      <div class="dc-val" id="throttleVal">0</div>
+      <div class="dc-label">GAS %</div>
+    </div>
+  </div>
+
+  <!-- G-BAR -->
+  <div class="gbar-wrap">
+    <div class="gbar-track">
+      <div class="gbar-fill" id="gbarFill"></div>
+    </div>
+    <div class="gbar-labels">
+      <span class="gbar-label">0G</span>
+      <span class="gbar-label">G-FORCE</span>
+      <span class="gbar-label">1.2G</span>
+    </div>
+  </div>
+
+  <!-- TURBO BOOST -->
+  <div class="turbo-wrap">
+    <div class="turbo-label">BOOST</div>
+    <div class="turbo-pips" id="turboPips"></div>
+  </div>
+
+  <!-- START BUTTON -->
+  <div class="start-section">
+    <div class="start-btn-wrap" id="startBtnWrap">
+      <div class="pulse-ring r1"></div>
+      <div class="pulse-ring r2"></div>
+      <div class="start-btn-outer" id="startBtnOuter" onclick="toggleEngine()">
+        <div class="start-btn-dome" id="startBtnDome">
+          <div class="btn-label-main" id="btnLabelMain">START</div>
+          <div class="btn-label-sub">ENGINE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOUND PILL -->
+  <div class="sound-pill-wrap">
+    <div class="sound-pill" id="soundPill" onclick="openSheet()">
+      <div class="sp-icon" id="spIcon">🎵</div>
+      <div class="sp-info">
+        <div class="sp-name" id="spName">Sound auswählen</div>
+        <div class="sp-desc" id="spDesc">9 Motorsounds verfügbar</div>
+      </div>
+      <div class="sp-arrow" id="spArrow">›</div>
+    </div>
+  </div>
+
+  <!-- STATUS -->
+  <div class="status-bar" id="statusBar">Sensor aktiviert — Sound wählen &amp; starten</div>
+
+  <!-- OVERLAY + SHEET -->
+  <div class="overlay" id="overlay" onclick="closeSheet()"></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-drag"></div>
+    <div class="sheet-title">
+      <span class="sheet-title-label">Motorsound</span>
+      <div class="sheet-close" onclick="closeSheet()">✕</div>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+    <div class="sheet-footer">
+      <span class="vol-icon">🔈</span>
+      <input type="range" id="volSlider" min="0" max="100" value="70" oninput="setVol(this.value)">
+      <span class="vol-icon">🔊</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// SOUND LIBRARY
+// ════════════════════════════════════════════════════════
+const SOUNDS = [
+  {
+    id:'v8muscle', icon:'🏎️', name:'V8 Muscle Car', desc:'6.2L · 6.200 RPM · Detroit Thunder',
+    idleRpm:820,  maxRpm:6200,
+    idleFreq:52,  maxFreq:265,
+    dist:190, filterF:850,  filterQ:3.8,
+    sub:true, exhaust:true, turbo:false,
+    turboWhine:false,
+    oscs:[{t:'sawtooth',d:0,g:.52},{t:'sawtooth',d:11,g:.28},{t:'square',d:-7,g:.14},{t:'triangle',d:24,g:.06}],
+    gearRatios:[3.6,2.2,1.48,1.0,0.74,0.60],
+    shiftPoints:[30,58,92,140,185,240],
+    revResponse: 0.28,
+  },
+  {
+    id:'v12gt', icon:'🏁', name:'V12 Gran Turismo', desc:'6.5L · 8.500 RPM · Symphonie',
+    idleRpm:900,  maxRpm:8500,
+    idleFreq:60,  maxFreq:370,
+    dist:100, filterF:2000, filterQ:2.2,
+    sub:false, exhaust:true, turbo:false,
+    turboWhine:false,
+    oscs:[{t:'sawtooth',d:0,g:.50},{t:'sawtooth',d:7,g:.27},{t:'sawtooth',d:19,g:.13},{t:'square',d:3,g:.10}],
+    gearRatios:[3.4,2.0,1.38,1.0,0.76,0.62],
+    shiftPoints:[32,64,100,148,192,260],
+    revResponse:0.32,
+  },
+  {
+    id:'f1', icon:'⚡', name:'F1 · Formel Motor', desc:'1.6L V6 Hybrid · 15.000 RPM',
+    idleRpm:3500, maxRpm:15000,
+    idleFreq:130, maxFreq:750,
+    dist:48,  filterF:4000, filterQ:1.6,
+    sub:false, exhaust:false, turbo:false,
+    turboWhine:true,
+    oscs:[{t:'sawtooth',d:0,g:.60},{t:'sawtooth',d:14,g:.24},{t:'square',d:-12,g:.16}],
+    gearRatios:[3.2,2.0,1.42,1.06,0.80,0.64,0.53],
+    shiftPoints:[60,110,160,210,260,310,340],
+    revResponse:0.50,
+  },
+  {
+    id:'diesel', icon:'🚛', name:'Diesel Turbo', desc:'3.0L TDI · 3.800 RPM · Traktor',
+    idleRpm:680,  maxRpm:3800,
+    idleFreq:28,  maxFreq:108,
+    dist:310, filterF:360,  filterQ:5.5,
+    sub:true, exhaust:false, turbo:true,
+    turboWhine:true,
+    oscs:[{t:'square',d:0,g:.56},{t:'sawtooth',d:5,g:.28},{t:'triangle',d:-3,g:.16}],
+    gearRatios:[4.2,2.5,1.6,1.1,0.85,0.70],
+    shiftPoints:[20,42,68,100,140,185],
+    revResponse:0.18,
+  },
+  {
+    id:'superbike', icon:'🏍️', name:'Superbike', desc:'1000cc · 14.000 RPM · Inline-4',
+    idleRpm:1400, maxRpm:14000,
+    idleFreq:85,  maxFreq:640,
+    dist:82,  filterF:2400, filterQ:2.8,
+    sub:false, exhaust:true, turbo:false,
+    turboWhine:false,
+    oscs:[{t:'sawtooth',d:0,g:.64},{t:'square',d:24,g:.20},{t:'sawtooth',d:7,g:.16}],
+    gearRatios:[3.1,1.9,1.4,1.08,0.84,0.69],
+    shiftPoints:[35,68,102,148,185,225],
+    revResponse:0.46,
+  },
+  {
+    id:'boxer6', icon:'🐝', name:'Boxer Flat-6', desc:'3.8L · 7.200 RPM · Porsche-DNA',
+    idleRpm:760,  maxRpm:7200,
+    idleFreq:45,  maxFreq:215,
+    dist:145, filterF:1200, filterQ:3.8,
+    sub:false, exhaust:true, turbo:false,
+    turboWhine:false,
+    oscs:[{t:'sawtooth',d:0,g:.50},{t:'square',d:6,g:.32},{t:'sawtooth',d:-10,g:.18}],
+    gearRatios:[3.5,2.1,1.45,1.0,0.76,0.62],
+    shiftPoints:[30,62,96,140,186,240],
+    revResponse:0.30,
+  },
+  {
+    id:'lmp', icon:'🔴', name:'LMP V10', desc:'5.0L · 10.000 RPM · Le Mans',
+    idleRpm:1200, maxRpm:10000,
+    idleFreq:78,  maxFreq:530,
+    dist:72,  filterF:3000, filterQ:2.0,
+    sub:false, exhaust:true, turbo:false,
+    turboWhine:false,
+    oscs:[{t:'sawtooth',d:0,g:.54},{t:'sawtooth',d:10,g:.24},{t:'sawtooth',d:20,g:.11},{t:'square',d:3,g:.11}],
+    gearRatios:[3.0,1.8,1.3,1.0,0.78,0.62,0.52],
+    shiftPoints:[55,105,155,205,255,305,340],
+    revResponse:0.42,
+  },
+  {
+    id:'scifi', icon:'🚀', name:'Sci-Fi Turbine', desc:'EV · ∞ RPM · futuristisch',
+    idleRpm:200,  maxRpm:22000,
+    idleFreq:38,  maxFreq:900,
+    dist:14,  filterF:6000, filterQ:9,
+    sub:true, exhaust:false, turbo:false,
+    turboWhine:true,
+    oscs:[{t:'sine',d:0,g:.42},{t:'sawtooth',d:1200,g:.36},{t:'sine',d:2400,g:.22}],
+    gearRatios:[1.0,1.0,1.0,1.0,1.0,1.0],
+    shiftPoints:[999,999,999,999,999,999],
+    revResponse:0.55,
+  },
+  {
+    id:'bigblock', icon:'🏗️', name:'Big Block Truck', desc:'7.0L · 4.000 RPM · Tiefton',
+    idleRpm:520,  maxRpm:4000,
+    idleFreq:22,  maxFreq:84,
+    dist:340, filterF:280,  filterQ:6.5,
+    sub:true, exhaust:false, turbo:true,
+    turboWhine:true,
+    oscs:[{t:'square',d:0,g:.60},{t:'sawtooth',d:2,g:.26},{t:'triangle',d:-5,g:.14}],
+    gearRatios:[4.5,2.7,1.7,1.2,0.92,0.75],
+    shiftPoints:[18,38,60,90,130,175],
+    revResponse:0.16,
+  },
+];
+
+// ════════════════════════════════════════════════════════
+// TACHOMETER BUILD
+// ════════════════════════════════════════════════════════
+const CX=150, CY=150, R=118;
+const ARC_START=210, ARC_SWEEP=240;
+
+function degToRad(d){ return (d-90)*Math.PI/180; }
+function arcPoint(deg,r){
+  const rad=degToRad(deg);
+  return {x:CX+r*Math.cos(rad), y:CY+r*Math.sin(rad)};
+}
+function makeArcPath(startDeg,endDeg,r){
+  const s=arcPoint(startDeg,r), e=arcPoint(endDeg,r);
+  const large=(endDeg-startDeg)>180?1:0;
+  if(Math.abs(endDeg-startDeg)<0.1) return '';
+  return `M${s.x.toFixed(2)} ${s.y.toFixed(2)} A${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+}
+
+function buildTacho(){
+  // Background arc
+  document.getElementById('tachoArcBg').setAttribute('d', makeArcPath(ARC_START, ARC_START+ARC_SWEEP, R));
+  // Red zone (last 18%)
+  const redStart = ARC_START + ARC_SWEEP*0.82;
+  document.getElementById('tachoArcRed').setAttribute('d', makeArcPath(redStart, ARC_START+ARC_SWEEP, R));
+
+  // Ticks
+  const tg=document.getElementById('tachoTicks');
+  const lg=document.getElementById('tachoLabels');
+  for(let i=0;i<=20;i++){
+    const deg=ARC_START+(ARC_SWEEP/20)*i;
+    const isMajor=(i%2===0);
+    const isRed=i>=17;
+    const inner=arcPoint(deg, R-(isMajor?14:8));
+    const outer=arcPoint(deg, R-2);
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',inner.x); line.setAttribute('y1',inner.y);
+    line.setAttribute('x2',outer.x); line.setAttribute('y2',outer.y);
+    line.setAttribute('stroke',isRed?'rgba(180,20,20,0.55)':isMajor?'#2a2a50':'#1c1c38');
+    line.setAttribute('stroke-width',isMajor?'2':'1');
+    line.setAttribute('stroke-linecap','round');
+    tg.appendChild(line);
+    // Number labels at major ticks
+    if(isMajor){
+      const lp=arcPoint(deg,R-26);
+      const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x',lp.x); txt.setAttribute('y',lp.y);
+      txt.setAttribute('fill',isRed?'rgba(180,40,40,0.7)':'#252545');
+      txt.setAttribute('font-size','9');
+      txt.textContent=(i/2);
+      lg.appendChild(txt);
+    }
+  }
+}
+
+function updateTacho(rpm, maxRpm){
+  const pct=Math.max(0,Math.min(1,rpm/maxRpm));
+  const angleDeg=ARC_START+ARC_SWEEP*pct;
+
+  // Needle
+  const needle=document.getElementById('needleGroup');
+  needle.style.transform=`rotate(${ARC_START+ARC_SWEEP*pct-90}deg)`;
+
+  // Fill arc
+  const fillEl=document.getElementById('tachoArcFill');
+  const glowEl=document.getElementById('tachoArcGlow');
+  if(pct>0.005){
+    const path=makeArcPath(ARC_START,angleDeg,R);
+    fillEl.setAttribute('d',path);
+    glowEl.setAttribute('d',path);
+    glowEl.style.opacity=pct>0.6?((pct-0.6)/0.4*0.5).toFixed(2):'0';
+  } else {
+    fillEl.setAttribute('d','');
+    glowEl.style.opacity='0';
+  }
+
+  // Color zones
+  let clr, glowClr;
+  if(pct<0.55){   clr='#30d158'; glowClr='#30d158'; }
+  else if(pct<0.78){ clr='#ff9500'; glowClr='#ff9500'; }
+  else{           clr='#ff3030'; glowClr='#ff3030'; }
+  fillEl.setAttribute('stroke',clr);
+  glowEl.setAttribute('stroke',glowClr);
+
+  // RPM display
+  const rpmEl=document.getElementById('rpmBig');
+  rpmEl.textContent=Math.round(rpm).toLocaleString('de-DE');
+  rpmEl.style.color=pct>0.82?'#ff4040':pct>0.65?'#ffaa00':'#ffffff';
+}
+
+// ════════════════════════════════════════════════════════
+// TURBO PIPS
+// ════════════════════════════════════════════════════════
+function buildTurboPips(){
+  const wrap=document.getElementById('turboPips');
+  for(let i=0;i<16;i++){
+    const pip=document.createElement('div');
+    pip.className='turbo-pip';
+    pip.id='pip'+i;
+    wrap.appendChild(pip);
+  }
+}
+function updateTurboPips(pct){
+  const lit=Math.floor(pct*16);
+  for(let i=0;i<16;i++){
+    const pip=document.getElementById('pip'+i);
+    pip.className='turbo-pip';
+    if(i<lit){
+      if(i<8)  pip.classList.add('lit-green');
+      else if(i<13) pip.classList.add('lit-amber');
+      else pip.classList.add('lit-red');
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// SHEET
+// ════════════════════════════════════════════════════════
+function buildSheet(){
+  const body=document.getElementById('sheetBody');
+  SOUNDS.forEach(s=>{
+    const row=document.createElement('div');
+    row.className='sound-row'; row.id='row_'+s.id;
+    row.innerHTML=`
+      <div class="sr-icon">${s.icon}</div>
+      <div class="sr-text">
+        <div class="sr-name">${s.name}</div>
+        <div class="sr-desc">${s.desc}</div>
+      </div>
+      <div class="sr-right">
+        <div class="sr-preview" id="prev_${s.id}">▶</div>
+        <div class="sr-check">✓</div>
+      </div>`;
+    row.addEventListener('click', e=>{
+      if(e.target.closest('.sr-preview')) return;
+      selectSound(s); closeSheet();
+    });
+    body.appendChild(row);
+    setTimeout(()=>{
+      const pb=document.getElementById('prev_'+s.id);
+      if(!pb) return;
+      // Use touchend for iOS (fires in user gesture context), fallback click
+      const handler = e=>{
+        e.stopPropagation();
+        e.preventDefault();
+        previewSound(s, pb);
+      };
+      pb.addEventListener('touchend', handler, {passive:false});
+      pb.addEventListener('click', handler);
+    },0);
+  });
+}
+
+function openSheet(){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+  document.getElementById('spArrow').classList.add('open');
+}
+function closeSheet(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('sheet').classList.remove('show');
+  document.getElementById('spArrow').classList.remove('open');
+}
+
+function selectSound(s){
+  selectedSound=s;
+  document.getElementById('spIcon').textContent=s.icon;
+  document.getElementById('spName').textContent=s.name;
+  document.getElementById('spDesc').textContent=s.desc;
+  document.querySelectorAll('.sound-row').forEach(r=>r.classList.remove('active'));
+  const row=document.getElementById('row_'+s.id);
+  if(row) row.classList.add('active');
+  if(isRunning) rebuildAudio();
+}
+
+// ════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ════════════════════════════════════════════════════════
+function makeCurve(amount){
+  const n=512, c=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const x=(i*2)/n-1;
+    c[i]=((Math.PI+amount)*x)/(Math.PI+amount*Math.abs(x));
+  }
+  return c;
+}
+
+let audioCtx=null, masterGain=null;
+let engineNodes=[], distNode=null, filterNode=null;
+let subOsc=null, subGainNode=null;
+let exhSrc=null, exhGain=null;
+let turboOsc=null, turboGain=null;
+
+function initAudio(){
+  // Reuse context if preview already created one
+  if(!audioCtx || audioCtx.state==='closed'){
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  }
+  if(!masterGain || masterGain.context!==audioCtx){
+    masterGain=audioCtx.createGain();
+    masterGain.gain.value=parseInt(document.getElementById('volSlider').value)/100;
+    masterGain.connect(audioCtx.destination);
+  }
+}
+
+function teardownAudio(){
+  engineNodes.forEach(n=>{
+    try{n.stop&&n.stop();}catch(e){}
+    try{n.disconnect&&n.disconnect();}catch(e){}
+  });
+  engineNodes=[];
+  [distNode,filterNode,subOsc,subGainNode,exhSrc,exhGain,turboOsc,turboGain].forEach(n=>{
+    if(!n) return;
+    try{n.stop&&n.stop();}catch(e){}
+    try{n.disconnect&&n.disconnect();}catch(e){}
+  });
+  distNode=filterNode=subOsc=subGainNode=exhSrc=exhGain=turboOsc=turboGain=null;
+}
+
+function rebuildAudio(){
+  teardownAudio();
+  const s=selectedSound; if(!s||!audioCtx) return;
+
+  // Master chain: oscs → dist → filter → compressor → master
+  const comp=audioCtx.createDynamicsCompressor();
+  comp.threshold.value=-18; comp.knee.value=20;
+  comp.ratio.value=8; comp.attack.value=0.003; comp.release.value=0.15;
+  comp.connect(masterGain);
+
+  distNode=audioCtx.createWaveShaper();
+  distNode.curve=makeCurve(s.dist);
+  distNode.oversample='4x';
+  distNode.connect(comp);
+
+  filterNode=audioCtx.createBiquadFilter();
+  filterNode.type='lowpass';
+  filterNode.frequency.value=s.filterF;
+  filterNode.Q.value=s.filterQ;
+  filterNode.connect(distNode);
+
+  const oscMix=audioCtx.createGain(); oscMix.gain.value=1.0;
+  oscMix.connect(filterNode);
+
+  currentEngineFreq=s.idleFreq;
+
+  s.oscs.forEach(def=>{
+    const osc=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    osc.type=def.t;
+    osc.frequency.value = s.id==='scifi' ? s.idleFreq*Math.pow(2,def.d/1200) : s.idleFreq;
+    if(s.id!=='scifi') osc.detune.value=def.d;
+    g.gain.value=def.g;
+    osc.connect(g); g.connect(oscMix); osc.start();
+    engineNodes.push(osc,g);
+  });
+
+  // Sub bass
+  if(s.sub){
+    subOsc=audioCtx.createOscillator();
+    subGainNode=audioCtx.createGain();
+    subGainNode.gain.value=0.24;
+    subOsc.type='sine';
+    subOsc.frequency.value=s.idleFreq*0.5;
+    subOsc.connect(subGainNode); subGainNode.connect(comp); subOsc.start();
+  }
+
+  // Exhaust noise (bandpass filtered white noise)
+  if(s.exhaust){
+    const sr=audioCtx.sampleRate;
+    const bufSz=Math.floor(sr*0.4);
+    const buf=audioCtx.createBuffer(1,bufSz,sr);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<bufSz;i++) d[i]=Math.random()*2-1;
+    exhSrc=audioCtx.createBufferSource();
+    exhSrc.buffer=buf; exhSrc.loop=true;
+    const exhBp=audioCtx.createBiquadFilter();
+    exhBp.type='bandpass'; exhBp.frequency.value=200; exhBp.Q.value=0.7;
+    exhGain=audioCtx.createGain(); exhGain.gain.value=0;
+    exhSrc.connect(exhBp); exhBp.connect(exhGain); exhGain.connect(comp);
+    exhSrc.start();
+  }
+
+  // Turbo/whine layer
+  if(s.turboWhine){
+    turboOsc=audioCtx.createOscillator();
+    const turboFilt=audioCtx.createBiquadFilter();
+    turboFilt.type='bandpass'; turboFilt.Q.value=12;
+    turboFilt.frequency.value=800;
+    turboGain=audioCtx.createGain(); turboGain.gain.value=0;
+    turboOsc.type='sawtooth';
+    turboOsc.frequency.value=300;
+    turboOsc.connect(turboFilt); turboFilt.connect(turboGain); turboGain.connect(comp);
+    turboOsc.start();
+    engineNodes.push(turboOsc,turboFilt,turboGain);
+  }
+
+  engineNodes.push(oscMix,filterNode,distNode,comp);
+}
+
+function setEngineFreq(targetFreq, throttlePct, accelG){
+  if(!audioCtx||!selectedSound) return;
+  const s=selectedSound;
+  const now=audioCtx.currentTime;
+  const ramp=0.07;
+
+  let i=0;
+  engineNodes.forEach(n=>{
+    if(n instanceof OscillatorNode && n!==turboOsc){
+      const def=s.oscs[i++]; if(!def) return;
+      const tf=s.id==='scifi' ? targetFreq*Math.pow(2,def.d/1200) : targetFreq;
+      n.frequency.linearRampToValueAtTime(tf, now+ramp);
+    }
+  });
+
+  if(subOsc) subOsc.frequency.linearRampToValueAtTime(targetFreq*0.5, now+ramp);
+
+  // Exhaust crackle on lift-off
+  if(exhGain){
+    const exhAmt=Math.max(0, accelG<-0.05 ? Math.min(1,-accelG*3) : throttlePct*0.06);
+    exhGain.gain.linearRampToValueAtTime(exhAmt*0.12, now+0.12);
+  }
+
+  // Turbo whine rises with RPM
+  if(turboOsc && turboGain){
+    const rpmPct=(currentRpm-(selectedSound.idleRpm))/(selectedSound.maxRpm-selectedSound.idleRpm);
+    const whineFreq=200+rpmPct*1800;
+    turboOsc.frequency.linearRampToValueAtTime(whineFreq, now+0.1);
+    turboGain.gain.linearRampToValueAtTime(Math.max(0,rpmPct*0.08), now+0.1);
+  }
+
+  // Dynamic filter cutoff with throttle
+  if(filterNode){
+    const fTarget=s.filterF*(0.6+throttlePct*0.7);
+    filterNode.frequency.linearRampToValueAtTime(Math.min(fTarget,s.filterF*1.4), now+0.1);
+  }
+
+  currentEngineFreq=targetFreq;
+}
+
+// ════════════════════════════════════════════════════════
+// PREVIEW
+// ════════════════════════════════════════════════════════
+let prevNodes=[], prevTimer=null, prevBtn=null;
+
+function stopPreview(){
+  if(prevTimer){clearTimeout(prevTimer);prevTimer=null;}
+  prevNodes.forEach(n=>{
+    try{n.stop&&n.stop();}catch(e){}
+    try{n.disconnect&&n.disconnect();}catch(e){}
+  });
+  prevNodes=[];
+  if(prevBtn){prevBtn.classList.remove('playing');prevBtn.textContent='▶';prevBtn=null;}
+}
+
+function previewSound(s, btn){
+  if(prevBtn===btn){stopPreview();return;}
+  stopPreview();
+
+  // Create fresh context every time — guaranteed unlocked on iOS
+  // (must happen synchronously inside the gesture handler)
+  let ctx;
+  try {
+    ctx = new (window.AudioContext||window.webkitAudioContext)();
+  } catch(e){ return; }
+
+  // Build graph immediately — before any async
+  const vol = parseInt(document.getElementById('volSlider').value)/100;
+  const masterG = ctx.createGain();
+  masterG.gain.value = vol * 0.85;
+  masterG.connect(ctx.destination);
+
+  const dist = ctx.createWaveShaper();
+  dist.curve = makeCurve(s.dist);
+  dist.oversample = '4x';
+
+  const filt = ctx.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = s.filterF;
+  filt.Q.value = s.filterQ;
+
+  const mix = ctx.createGain();
+  mix.gain.value = 1.0;
+
+  dist.connect(filt);
+  filt.connect(masterG);
+  mix.connect(dist);
+
+  const midFreq = s.idleFreq + (s.maxFreq - s.idleFreq) * 0.58;
+  const now = ctx.currentTime;
+
+  s.oscs.forEach(def => {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = def.t;
+    osc.detune.value = (s.id !== 'scifi') ? def.d : 0;
+    g.gain.value = def.g;
+    osc.connect(g); g.connect(mix);
+    osc.start(now);
+    osc.frequency.setValueAtTime(s.idleFreq, now);
+    osc.frequency.linearRampToValueAtTime(midFreq, now + 1.5);
+    osc.frequency.linearRampToValueAtTime(s.idleFreq * 1.05, now + 2.8);
+    prevNodes.push(osc, g);
+  });
+
+  if(s.sub){
+    const sub = ctx.createOscillator();
+    const sg = ctx.createGain();
+    sub.type = 'sine'; sg.gain.value = 0.22;
+    sub.connect(sg); sg.connect(masterG);
+    sub.start(now);
+    sub.frequency.setValueAtTime(s.idleFreq * 0.5, now);
+    sub.frequency.linearRampToValueAtTime(s.maxFreq * 0.42, now + 1.5);
+    sub.frequency.linearRampToValueAtTime(s.idleFreq * 0.55, now + 2.8);
+    prevNodes.push(sub, sg);
+  }
+
+  masterG.gain.setValueAtTime(vol * 0.85, now + 2.4);
+  masterG.gain.linearRampToValueAtTime(0, now + 3.1);
+  prevNodes.push(masterG, dist, filt, mix);
+
+  // Resume after graph is built — ctx may still need unlock
+  ctx.resume().catch(()=>{});
+
+  prevBtn = btn;
+  btn.classList.add('playing');
+  btn.textContent = '■';
+
+  prevTimer = setTimeout(()=>{
+    stopPreview();
+    try{ ctx.close(); } catch(e){}
+  }, 3400);
+}
+
+// ════════════════════════════════════════════════════════
+// SENSORS: IMU + GPS
+// ════════════════════════════════════════════════════════
+let useMotion=false, useGps=false;
+let motionAccelX=0, motionAccelY=0, motionAccelZ=0;
+let rawAccelG=0;  // g-force along driving axis
+let currentSpeed=0, lastSpeed=0, gpsAccel=0;
+let lastGpsTime=Date.now();
+let gpsWatchId=null;
+
+// Smooth filters
+let smoothAccelG=0, smoothThrottle=0, smoothSpeed=0;
+
+function startMotion(){
+  window.addEventListener('devicemotion', onDeviceMotion);
+  setBadge('mot','on','IMU');
+}
+
+function onDeviceMotion(e){
+  // accelerationIncludingGravity gives raw sensor, acceleration gives without gravity
+  const a = e.acceleration || e.accelerationIncludingGravity;
+  if(!a) return;
+  // Use the axis that aligns with car direction (typically Y on phone landscape, or Z on flat)
+  // We take the magnitude and sign of the forward axis
+  motionAccelX = a.x||0;
+  motionAccelY = a.y||0;
+  motionAccelZ = a.z||0;
+  // Primary driving direction: we check all 3 and use the best guess
+  // On phone lying flat: Y axis is forward/back
+  // On phone upright: Z or Y
+  const rawG = motionAccelY / 9.81;
+  rawAccelG = rawG;
+}
+
+function startGPS(){
+  if(!navigator.geolocation) return;
+  setBadge('gps','seek','GPS…');
+  gpsWatchId=navigator.geolocation.watchPosition(
+    pos=>{
+      setBadge('gps','on','GPS');
+      const now=Date.now(), dt=(now-lastGpsTime)/1000;
+      lastGpsTime=now;
+      const spd=pos.coords.speed!=null?pos.coords.speed*3.6:currentSpeed;
+      gpsAccel=dt>0?Math.max(-15,Math.min(15,(spd-lastSpeed)/dt/3.6)):0;
+      lastSpeed=spd; currentSpeed=spd;
+    },
+    ()=>setBadge('gps','off','GPS'),
+    {enableHighAccuracy:true,maximumAge:500,timeout:8000}
+  );
+}
+
+function stopGPS(){
+  if(gpsWatchId!=null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
+  setBadge('gps','off','GPS');
+}
+
+function setBadge(which, state, label){
+  const dot=document.getElementById(which+'Dot');
+  const lbl=document.getElementById(which+'Label');
+  dot.className='badge-dot';
+  if(state==='on')  dot.classList.add('on');
+  if(state==='seek') dot.classList.add('seek');
+  lbl.textContent=label;
+}
+
+// ════════════════════════════════════════════════════════
+// ENGINE MODEL
+// ════════════════════════════════════════════════════════
+let currentRpm=0, targetRpm=0, currentEngineFreq=0;
+let currentThrottle=0;
+
+function computeThrottle(accelG, speedKmh){
+  // Positive accel = throttle, negative = lift/brake
+  // Combine IMU and GPS
+  let ag=accelG;
+  if(useMotion) ag=rawAccelG;
+  else if(useGps) ag=gpsAccel/9.81;
+
+  smoothAccelG += (ag-smoothAccelG)*0.25;
+
+  // Throttle: 0-1 from positive accel
+  const thr=Math.max(0, Math.min(1, smoothAccelG*1.8 + 0.12)); // 0.12 = idle load
+  smoothThrottle += (thr-smoothThrottle)*0.18;
+  return {throttle:smoothThrottle, accelG:smoothAccelG};
+}
+
+function speedToRpm(speedKmh, throttle, s){
+  // Determine gear
+  let gear=1;
+  for(let i=0;i<s.shiftPoints.length;i++){
+    if(speedKmh>s.shiftPoints[i]) gear=i+2;
+  }
+  gear=Math.max(1,Math.min(gear,s.gearRatios.length));
+
+  // RPM from speed and gear ratio (approximate wheel speed * ratio)
+  const ratio=s.gearRatios[gear-1]||1.0;
+  const baseRpm=s.idleRpm+(speedKmh/240)*(s.maxRpm-s.idleRpm)*ratio*0.55;
+
+  // Add throttle contribution: more throttle = higher RPM
+  const thrRpm=throttle*(s.maxRpm-s.idleRpm)*0.3;
+
+  // Also direct accel effect on RPM (engine revving before speed builds)
+  const accelRpm=Math.max(0,smoothAccelG)*(s.maxRpm-s.idleRpm)*0.18;
+
+  const rawTarget=Math.max(s.idleRpm, Math.min(s.maxRpm, baseRpm+thrRpm+accelRpm));
+  return {rpm:rawTarget, gear};
+}
+
+// ════════════════════════════════════════════════════════
+// MAIN LOOP
+// ════════════════════════════════════════════════════════
+let isRunning=false, rafId=null;
+let selectedSound=null;
+
+function mainLoop(){
+  if(!isRunning){rafId=null;return;}
+
+  const {throttle, accelG}=computeThrottle(rawAccelG, currentSpeed);
+  currentThrottle=throttle;
+
+  const s=selectedSound;
+  if(s){
+    const {rpm,gear}=speedToRpm(currentSpeed, throttle, s);
+    targetRpm=rpm;
+    // Smooth RPM with sound's revResponse characteristic
+    const alpha=s.revResponse+(throttle>0.5?0.08:0);
+    currentRpm+=(targetRpm-currentRpm)*Math.min(alpha,0.7);
+    currentRpm=Math.max(s.idleRpm*0.9, currentRpm);
+
+    // Freq
+    const rpmPct=(currentRpm-s.idleRpm)/(s.maxRpm-s.idleRpm);
+    const targetFreq=s.idleFreq+rpmPct*(s.maxFreq-s.idleFreq);
+    setEngineFreq(Math.max(s.idleFreq*0.9,targetFreq), throttle, accelG);
+
+    // Tacho
+    updateTacho(currentRpm, s.maxRpm);
+
+    // Gear display
+    let {gear:g}=speedToRpm(currentSpeed,throttle,s);
+    document.getElementById('gearDisplay').textContent=currentSpeed<1.5?'N':g;
+
+    // G-bar
+    const gAbs=Math.min(1.2, Math.abs(smoothAccelG));
+    document.getElementById('gbarFill').style.width=(gAbs/1.2*100)+'%';
+
+    // Turbo pips — represents throttle + RPM combined
+    updateTurboPips(Math.min(1, throttle*0.6 + rpmPct*0.4));
+
+    // Throttle %
+    document.getElementById('throttleVal').textContent=Math.round(throttle*100);
+
+    // G-force display
+    document.getElementById('accelVal').textContent=smoothAccelG.toFixed(2)+'g';
+  }
+
+  // Speed from GPS
+  smoothSpeed+=(currentSpeed-smoothSpeed)*0.25;
+  document.getElementById('speedVal').textContent=Math.round(smoothSpeed);
+
+  rafId=requestAnimationFrame(mainLoop);
+}
+
+// ════════════════════════════════════════════════════════
+// TOGGLE ENGINE
+// ════════════════════════════════════════════════════════
+async function toggleEngine(){
+  if(!selectedSound){
+    openSheet();
+    setStatus('Zuerst einen Sound auswählen ↑');
+    document.getElementById('soundPill').style.borderColor='var(--red)';
+    setTimeout(()=>document.getElementById('soundPill').style.borderColor='',1000);
+    return;
+  }
+
+  if(!isRunning){
+    isRunning=true;
+    document.getElementById('btnLabelMain').textContent='STOP';
+    document.getElementById('startBtnOuter').classList.add('running');
+    document.getElementById('startBtnWrap').classList.add('running');
+    document.getElementById('ambient').classList.add('running');
+    document.getElementById('soundPill').classList.add('glow');
+
+    if(!audioCtx) initAudio();
+    else if(audioCtx.state==='suspended') await audioCtx.resume();
+    masterGain.gain.value=parseInt(document.getElementById('volSlider').value)/100;
+    rebuildAudio();
+    startGPS();
+    setStatus('Motor läuft — Fahren oder Handy bewegen!');
+    rafId=requestAnimationFrame(mainLoop);
+  } else {
+    isRunning=false;
+    document.getElementById('btnLabelMain').textContent='START';
+    document.getElementById('startBtnOuter').classList.remove('running');
+    document.getElementById('startBtnWrap').classList.remove('running');
+    document.getElementById('ambient').classList.remove('running');
+    document.getElementById('soundPill').classList.remove('glow');
+
+    if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+    stopGPS();
+
+    if(masterGain){
+      masterGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime+0.6);
+      setTimeout(()=>{teardownAudio();if(audioCtx)audioCtx.suspend();},700);
+    }
+    currentRpm=0; currentSpeed=0; smoothSpeed=0; smoothAccelG=0; smoothThrottle=0;
+    updateTacho(0,6000);
+    updateTurboPips(0);
+    document.getElementById('gbarFill').style.width='0%';
+    document.getElementById('speedVal').textContent='0';
+    document.getElementById('accelVal').textContent='0.00g';
+    document.getElementById('throttleVal').textContent='0';
+    document.getElementById('gearDisplay').textContent='N';
+    document.getElementById('rpmBig').textContent='0';
+    setStatus('Motor gestoppt');
+  }
+}
+
+function setVol(v){if(masterGain) masterGain.gain.value=v/100;}
+function setStatus(m){document.getElementById('statusBar').textContent=m;}
+
+// ════════════════════════════════════════════════════════
+// PERMISSIONS
+// ════════════════════════════════════════════════════════
+function showApp(){
+  document.getElementById('permScreen').style.display='none';
+  document.getElementById('app').style.display='flex';
+}
+
+async function requestMotionPermission(){
+  // iOS 13+ requires explicit permission for DeviceMotion
+  if(typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+    try {
+      const result = await DeviceMotionEvent.requestPermission();
+      if(result==='granted'){
+        useMotion=true;
+        startMotion();
+        setBadge('mot','on','IMU ✓');
+        setStatus('Bewegungssensor aktiv — jetzt starten!');
+      } else {
+        useMotion=false;
+        setBadge('mot','off','IMU ✗');
+        setStatus('Kein IMU — GPS-Modus aktiv');
+      }
+    } catch(e){
+      useMotion=false;
+    }
+  } else if(typeof DeviceMotionEvent !== 'undefined'){
+    // Non-iOS — no permission needed
+    useMotion=true;
+    startMotion();
+    setBadge('mot','on','IMU');
+  }
+  showApp();
+}
+
+function skipPermission(){
+  useMotion=false;
+  useGps=true;
+  setBadge('mot','off','IMU');
+  setStatus('GPS-Modus — Sound wählen & starten');
+  showApp();
+}
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+buildTacho();
+buildTurboPips();
+buildSheet();
+
+// On non-iOS or desktop: auto-start without permission screen
+if(typeof DeviceMotionEvent === 'undefined'){
+  skipPermission();
+} else if(typeof DeviceMotionEvent.requestPermission !== 'function'){
+  // Android or older browser — no permission API needed
+  useMotion=true;
+  skipPermission();
+  startMotion();
+}
+</script>
+</body>
+</html>
